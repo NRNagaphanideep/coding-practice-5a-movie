@@ -1,140 +1,183 @@
 const express = require("express");
-const { open } = require("sqlite");
-const sqlite3 = require("sqlite3");
 const path = require("path");
-
-const databasePath = path.join(__dirname, "moviesData.db");
-
 const app = express();
 
+const { open } = require("sqlite");
+const sqlite3 = require("sqlite3");
 app.use(express.json());
 
-let database = null;
+let db = null;
 
+const dbPath = path.join(__dirname, "covid19India.db");
 const initializeDbAndServer = async () => {
   try {
-    database = await open({
-      filename: databasePath,
+    db = await open({
+      filename: dbPath,
       driver: sqlite3.Database,
     });
-    app.listen(3000, () =>
-      console.log("Server Running at http://localhost:3000/")
-    );
-  } catch (error) {
-    console.log(`DB Error: ${error.message}`);
+    app.listen(3000, () => {
+      console.log("Server Running at http://localhost:3000/");
+    });
+  } catch (e) {
+    console.log(`DB Error: ${e.message}`);
     process.exit(1);
   }
 };
 
 initializeDbAndServer();
-
-const convertMovieDbObjectToResponseObject = (dbObject) => {
+const convertStateDbObjectToResponseObject = (dbObject) => {
   return {
-    movieId: dbObject.movie_id,
-    directorId: dbObject.director_id,
-    movieName: dbObject.movie_name,
-    leadActor: dbObject.lead_actor,
+    stateId: dbObject.state_id,
+    stateName: dbObject.state_name,
+    population: dbObject.population,
   };
 };
 
-const convertDirectorDbObjectToResponseObject = (dbObject) => {
+const convertDistrictDbObjectToResponseObject = (dbObject) => {
   return {
-    directorId: dbObject.director_id,
-    directorName: dbObject.director_name,
+    districtId: dbObject.district_id,
+    districtName: dbObject.district_name,
+    stateId: dbObject.state_id,
+    cases: dbObject.cases,
+    cured: dbObject.cured,
+    active: dbObject.active,
+    deaths: dbObject.deaths,
   };
 };
 
-app.get("/movies/", async (request, response) => {
-  const getMoviesQuery = `
+//GET ALL STATES API
+app.get("/states/", async (request, response) => {
+  const getStateQuery = `
     SELECT
-      movie_name
+      state_name
     FROM
-      movie;`;
-  const moviesArray = await database.all(getMoviesQuery);
+      state;`;
+  const statesArray = await db.all(getStateQuery);
   response.send(
-    moviesArray.map((eachMovie) => ({ movieName: eachMovie.movie_name }))
+    statesArray.map((eachState) => ({ stateName: eachState.state_name }))
   );
 });
+//get stateID api
 
-app.get("/movies/:movieId/", async (request, response) => {
-  const { movieId } = request.params;
-  const getMovieQuery = `
-    SELECT 
-      *
+app.get("/states/:stateId/", async (request, response) => {
+  const { stateId } = request.params;
+  const getStateQuery = `SELECT
+    * 
     FROM 
-      movie 
-    WHERE 
-      movie_id = ${movieId};`;
-  const movie = await database.get(getMovieQuery);
-  response.send(convertMovieDbObjectToResponseObject(movie));
-});
-
-app.post("/movies/", async (request, response) => {
-  const { directorId, movieName, leadActor } = request.body;
-  const postMovieQuery = `
-  INSERT INTO
-    movie ( director_id, movie_name, lead_actor)
-  VALUES
-    (${directorId}, '${movieName}', '${leadActor}');`;
-  await database.run(postMovieQuery);
-  response.send("Movie Successfully Added");
-});
-
-app.put("/movies/:movieId/", async (request, response) => {
-  const { directorId, movieName, leadActor } = request.body;
-  const { movieId } = request.params;
-  const updateMovieQuery = `
-            UPDATE
-              movie
-            SET
-              director_id = ${directorId},
-              movie_name = '${movieName}',
-              lead_actor = '${leadActor}'
-            WHERE
-              movie_id = ${movieId};`;
-
-  await database.run(updateMovieQuery);
-  response.send("Movie Details Updated");
-});
-
-app.delete("/movies/:movieId/", async (request, response) => {
-  const { movieId } = request.params;
-  const deleteMovieQuery = `
-  DELETE FROM
-    movie
-  WHERE
-    movie_id = ${movieId};`;
-  await database.run(deleteMovieQuery);
-  response.send("Movie Removed");
-});
-
-app.get("/directors/", async (request, response) => {
-  const getDirectorsQuery = `
-    SELECT
-      *
-    FROM
-      director;`;
-  const directorsArray = await database.all(getDirectorsQuery);
-  response.send(
-    directorsArray.map((eachDirector) =>
-      convertDirectorDbObjectToResponseObject(eachDirector)
-    )
-  );
-});
-
-app.get("/directors/:directorId/movies/", async (request, response) => {
-  const { directorId } = request.params;
-  const getDirectorMoviesQuery = `
-    SELECT
-      movie_name
-    FROM
-      movie
+    state
     WHERE
-      director_id='${directorId}';`;
-  const moviesArray = await database.all(getDirectorMoviesQuery);
-  response.send(
-    moviesArray.map((eachMovie) => ({ movieName: eachMovie.movie_name }))
-  );
+    state_id = ${stateId};`;
+  const state = await db.get(getStateQuery);
+  response.send(convertStateDbObjectToResponseObject(state));
 });
-module.exports = app;
 
+//create a district api
+app.post("/districts/", async (request, response) => {
+  const districtDetails = request.body;
+  const {
+    districtName,
+    stateId,
+    cases,
+    cured,
+    active,
+    deaths,
+  } = districtDetails;
+  const addDistrictQuery = `
+    INSERT INTO
+    district(district_name, state_id,cases,cured,active,deaths)
+    VALUES (
+        '${districtName}',
+        ${stateId},
+        ${cases},
+        ${cured},
+        ${active},
+        ${deaths}
+    );`;
+  const districtArray = await db.run(addDistrictQuery);
+  response.send("District Successfully Added");
+});
+
+///get districtId api
+
+app.get("/districts/:districtId/", async (request, response) => {
+  const { districtId } = request.params;
+  const getDistrictQuery = `SELECT
+    * 
+    FROM 
+    district
+    WHERE
+    district_id = ${districtId};`;
+  const district = await db.get(getDistrictQuery);
+  response.send(convertDistrictDbObjectToResponseObject(district));
+});
+
+//DELETE DISTRICT ID
+app.delete("/districts/:districtId/", async (request, response) => {
+  const { districtId } = request.params;
+  const deleteDistrictQuery = `
+    DELETE 
+    FROM
+    district
+    WHERE
+    district_id = ${districtId};`;
+  await db.run(deleteDistrictQuery);
+  response.send("District Removed");
+});
+
+//update the district details api
+app.put("/districts/:districtId/", async (request, response) => {
+  const { districtId } = request.params;
+  const districtDetails = request.body;
+  const {
+    districtName,
+    stateId,
+    cases,
+    cured,
+    active,
+    deaths,
+  } = districtDetails;
+  const updateDistrictQuery = `
+    UPDATE
+    district
+    SET
+    district_name = '${districtName}',
+    state_id = ${stateId},
+    cases = ${cases},
+    cured = ${cured},
+    active = ${active},
+    deaths = ${deaths}
+    WHERE
+    district_id = ${districtId};`;
+  await db.run(updateDistrictQuery);
+  response.send("District Details Updated");
+});
+
+//RETURN THE STATS
+app.get("/states/:stateId/stats/", async (request, response) => {
+  const { stateId } = request.params;
+  const getStatsQuery = `
+    SELECT 
+    *
+    FROM
+    state
+    WHERE
+    state_id = ${stateId};`;
+  const statesArray = await db.all(getStatsQuery);
+  response.send(convertStateDbObjectToResponseObject(statesArray));
+});
+
+///state name based on district id api
+app.get("/districts/:districtId/details/", async (request, response) => {
+  const { districtId } = request.params;
+  const getDistrictQuery = `
+    SELECT 
+    *
+    FROM
+    district
+    WHERE
+    district_id = ${districtId};`;
+  const statesArray = await db.get(getDistrictQuery);
+  response.send(convertStateDbObjectToResponseObject(statesArray));
+});
+
+module.exports = app;
